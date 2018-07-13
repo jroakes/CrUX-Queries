@@ -1,0 +1,13 @@
+SELECT 
+  effective_connection_type.name AS ect, 
+  SUM(bin.density) AS density 
+FROM 
+  `chrome-ux-report.__report__`, 
+  UNNEST(first_contentful_paint.histogram.bin) AS bin 
+WHERE 
+  bin.end <= 2000 
+  AND 
+  origin LIKE '%__domain__' 
+GROUP BY ect 
+ORDER BY ect ASC;
+
