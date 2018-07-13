@@ -1,16 +1,42 @@
-SELECT 
-  ROUND(bin.end/1000,1), 
-  SUM(bin.density) 
-AS 
-  density 
-FROM 
-  `chrome-ux-report.__report__`, 
-  UNNEST(dom_content_loaded.histogram.bin) 
-AS 
-  bin 
-WHERE 
-  origin LIKE '%__domain__' 
-GROUP BY 
-  bin.end 
-ORDER BY 
-  bin.end;
+#standardSQL
+CREATE TEMPORARY FUNCTION spreadBins(bins ARRAY<STRUCT<start INT64, `end` INT64, density FLOAT64>>)
+RETURNS ARRAY<STRUCT<start INT64, density FLOAT64>>
+LANGUAGE js AS """
+  // Convert into 100ms bins and spread the density around.
+  const WIDTH = 100;
+  return (bins || []).reduce((bins, bin) => {
+    bin.start = +bin.start;
+    bin.end = Math.min(bin.end, bin.start + 5000);
+    const binWidth = bin.end - bin.start;
+    for (let start = bin.start; start < bin.end; start += WIDTH) {
+      bins.push({
+        start,
+        density: bin.density / (binWidth / WIDTH)
+      });
+    }
+    return bins;
+  }, []);
+""";
+
+SELECT
+  start,
+  density
+FROM (
+  SELECT
+    ROUND(bin.start/1000,1) as start,
+    ROUND(SUM(bin.density), 4) AS density
+  FROM (
+    SELECT
+      spreadBins(dom_content_loaded.histogram.bin) AS bins
+    FROM
+      `chrome-ux-report.__report__`
+    WHERE
+      origin LIKE '%__domain__')
+  CROSS JOIN
+    UNNEST(bins) AS bin
+  GROUP BY
+    start)
+WHERE
+  density > 0.0001
+ORDER BY
+  start
