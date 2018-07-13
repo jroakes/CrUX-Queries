@@ -1,0 +1,16 @@
+SELECT 
+  ROUND(bin.end/1000,1), 
+  SUM(bin.density) 
+AS 
+  density 
+FROM 
+  `chrome-ux-report.__report__`, 
+  UNNEST(dom_content_loaded.histogram.bin) 
+AS 
+  bin 
+WHERE 
+  origin LIKE '%__domain__' 
+GROUP BY 
+  bin.end 
+ORDER BY 
+  bin.end;
